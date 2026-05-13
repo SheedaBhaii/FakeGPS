@@ -1,7 +1,3 @@
-Here is a rewritten version of the `README.md`. It preserves the original structure and tone of the project while integrating the critical fixes for the `NaN` bug, service dependencies, and administrator requirements.
-
----
-
 # FakeGPS
 
 **Note: This driver has been updated to fix the "NaN" location timeout issue and improve compatibility with Windows 10/11.**
