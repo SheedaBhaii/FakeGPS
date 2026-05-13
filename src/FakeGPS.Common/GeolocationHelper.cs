@@ -44,8 +44,7 @@
         {
             if (!IsValid(latLong))
             {
-                // TODO: Handle invalid string input.
-                throw new NotImplementedException();
+                throw new ArgumentException("The provided LatLong string is not in a valid format.");
             }
 
             try
@@ -61,7 +60,6 @@
             }
             catch (Exception ex)
             {
-                // TODO: Handle invalid string parsing.
                 throw ex;
             }
         }
@@ -72,25 +70,51 @@
         /// <returns>
         /// The <see cref="LatLong"/> instance.
         /// </returns>
-        /// <remarks>
-        /// This currently includes Thread.Sleep hack to ensure the device is ready.
-        /// </remarks>
         public static LatLong Get()
         {
-            GeoCoordinateWatcher watcher = new GeoCoordinateWatcher();
-
-            watcher.TryStart(true, TimeSpan.FromMilliseconds(1000));
-
-            // TODO: hack hack hack
-            Thread.Sleep(1000);
-
-            GeoCoordinate coord = watcher.Position.Location;
-
-            return new LatLong()
+            using (var watcher = new GeoCoordinateWatcher())
             {
-                Latitude = coord.Latitude,
-                Longitude = coord.Longitude
-            };
+                // Start the watcher and wait up to 1 second for it to initialize
+                watcher.TryStart(false, TimeSpan.FromMilliseconds(1000));
+
+                GeoCoordinate coord = watcher.Position.Location;
+
+                // If the coordinate is initially unknown, wait for the API to find a fix
+                if (coord.IsUnknown)
+                {
+                    using (var waitHandle = new ManualResetEvent(false))
+                    {
+                        EventHandler<GeoPositionChangedEventArgs<GeoCoordinate>> handler = null;
+                        handler = (s, e) =>
+                        {
+                            if (!e.Position.Location.IsUnknown)
+                            {
+                                coord = e.Position.Location;
+                                waitHandle.Set(); // Found a location, wake up the thread
+                            }
+                        };
+
+                        watcher.PositionChanged += handler;
+
+                        // Wait up to 10 seconds for a valid position fix from Windows
+                        waitHandle.WaitOne(10000);
+
+                        watcher.PositionChanged -= handler;
+                    }
+                }
+
+                // If it's still unknown, throw an exception instead of returning NaN
+                if (coord.IsUnknown)
+                {
+                    throw new Exception("Unable to determine location. Please ensure 'Location Services' and 'Let desktop apps access your location' are both ON in Windows Privacy Settings.");
+                }
+
+                return new LatLong()
+                {
+                    Latitude = coord.Latitude,
+                    Longitude = coord.Longitude
+                };
+            }
         }
     }
 }
