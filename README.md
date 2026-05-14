@@ -55,7 +55,7 @@ Driver refresh complete!
 
 ```
 
-## New in v1.1
+## New in v1.2
 
 * **Automated Driver Refresh:** When setting a location (`-s`), the tool now automatically toggles the hardware state. This clears the Windows location cache instantly, so you don't have to manually disable/enable in Device Manager.
 * **NaN Bug Fix:** Implemented a 10-second wait for a valid sensor lock, preventing the "NaN" coordinates error found in older versions.
