@@ -1,14 +1,14 @@
 # FakeGPS
 
-**Note: This driver has been updated to fix the "NaN" location timeout issue and improve compatibility with Windows 10/11.**
+**Note: This driver has been updated to fix the "NaN" location timeout issue and implement automated driver refreshing for Windows 10/11.**
 
 FakeGPS is a Windows driver that allows the user to provide geolocation information without a physical GPS device.
 
-**Note: In order to use FakeGPS, please download [the latest released binary](https://github.com/SheedaBhaii/FakeGPS/releases), which includes the fixed build.**
+**Note: To use FakeGPS, please download [the latest released binary](https://github.com/SheedaBhaii/FakeGPS/releases), which includes the fixed build.**
 
 ## Why?
 
-Windows includes features like weather, time-zone syncing, and location-based reminders. When there is no GPS device, Windows tries to guess your location via Wi-Fi or IP address, which is often inaccurate or fails entirely on virtual machines and desktops.
+Windows includes features like weather, time-zone syncing, and location-based reminders. When there is no GPS device, Windows tries to guess your location via Wi-Fi or IP address, which is often inaccurate.
 
 This driver provides a manual override, allowing you to set a precise location that the entire Windows operating system will treat as real.
 
@@ -24,7 +24,7 @@ This driver provides a manual override, allowing you to set a precise location t
 ### Driver Installation
 
 * Ensure your system is in **Test Mode** (look for the watermark on your desktop).
-* [Download the latest fixed binary](https://github.com/SheedaBhaii/FakeGPS/releases/download/v1.1-fix/FakeGPS_Release.zip) and extract the zip to a folder.
+* [Download the latest binary](https://github.com/SheedaBhaii/FakeGPS/releases/latest) and extract the folder.
 * Open **Device Manager**, select any item, then go to **Action > Add legacy hardware**.
 * Choose **Install manually** > **Show All Devices** > **Have Disk**.
 * Browse to the extracted folder and select **`FakeGPS.inf`**.
@@ -32,7 +32,7 @@ This driver provides a manual override, allowing you to set a precise location t
 
 ### Command Line Options
 
-The command line tool must be run from an **Administrator Command Prompt**.
+The command line tool must be run from an **Administrator Command Prompt** to allow the automated driver refresh to function.
 
 ```bash
 # Get current status
@@ -45,23 +45,25 @@ FakeGPS -s <lat,long>
 
 **Example:**
 
-```powershell
-PS> FakeGPS -s 40.7580,-73.9855
+```cmd
+FakeGPS -s 40.7580,-73.9855
 The following location has been set in the driver's registry settings:
 Lat:    40.7580
 Long:   -73.9855
-
-PS> FakeGPS -g
-The following location has been got from the Windows location API:
-Lat:    40.7580
-Long:   -73.9855
+Refreshing driver to clear Windows location cache...
+Driver refresh complete!
 
 ```
 
-## Fixed in this version
+## New in v1.1
 
-* **NaN Bug Fix:** The previous version often returned `NaN` because it didn't wait long enough for the Windows API to initialize. The code now implements a `ManualResetEvent` that waits up to 10 seconds for a valid sensor lock.
-* **Registry Access:** Added documentation and error handling for Registry Access, ensuring users know to run as Administrator to save coordinates.
-* **Service Dependency:** Included instructions for the **Geolocation Service**, which is a mandatory requirement for the driver to communicate with the OS.
+* **Automated Driver Refresh:** When setting a location (`-s`), the tool now automatically toggles the hardware state. This clears the Windows location cache instantly, so you don't have to manually disable/enable in Device Manager.
+* **NaN Bug Fix:** Implemented a 10-second wait for a valid sensor lock, preventing the "NaN" coordinates error found in older versions.
+* **Localization Support:** Added `InvariantCulture` support to ensure coordinates parse correctly regardless of your Windows regional/decimal settings.
+* **Stability:** Compiled for x64 with a stable ILMerge configuration for a portable, single-executable experience.
 
-**Note:** If your location does not update immediately in apps like Google Maps or Weather, go to **Device Manager**, right-click the **FakeGPS** device, select **Disable**, and then **Enable**. This clears the Windows Geolocation cache.
+**Note:** If your location does not update in a web browser, try a new Incognito window or clear the browser cache to force a new check against the refreshed driver.
+
+```
+
+```
