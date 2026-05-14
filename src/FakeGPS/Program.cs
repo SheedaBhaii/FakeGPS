@@ -1,88 +1,115 @@
-﻿namespace FakeGPS
+﻿using System;
+using System.Diagnostics;
+using System.Linq;
+using FakeGPS.Common;
+using Microsoft.Win32;
+
+namespace FakeGPS
 {
-    using System;
-    using System.Diagnostics;
-
-    using FakeGPS.Common;
-
-    using CommandLine;
-
-    /// <summary>
-    /// The FakeGPS Command Line Program.
-    /// </summary>
-    internal class Program
+    class Program
     {
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
-        /// <param name="args">The Command Line Arguments.</param>
-        public static void Main(string[] args)
+        static int Main(string[] args)
         {
-            // not keen on the format of --help so let's do our own here
-            if (args == null || args.Length == 0)
+            try
             {
-                ConsoleHelper.WriteHeader();
-                ConsoleHelper.WriteHelp();
-                ConsoleHelper.WriteDebugExit();
-                return;
-            }
-
-            var parser = new Parser();
-
-            // get the command line parser results
-            var results = parser.ParseArguments<Options>(args);
-
-            // execute program functionality and return an exit code
-            var exitCode = 1;
-
-            results.WithParsed(
-                options =>
+                // 1. Check for -s (Set Location)
+                int sIndex = Array.FindIndex(args, x => x.Equals("-s", StringComparison.OrdinalIgnoreCase));
+                if (sIndex != -1 && args.Length > sIndex + 1)
                 {
-                    try
-                    {
-                        if (!string.IsNullOrWhiteSpace(options.LatLong))
-                        {
-                            // we have been given a set option
-                            if (!GeolocationHelper.IsValid(options.LatLong))
-                            {
-                                ErrorHelper.InvalidArguments("Invalid LatLong");
-                            }
+                    string coordString = args[sIndex + 1];
+                    var latLong = GeolocationHelper.ToLatLong(coordString);
 
-                            // set the value to the registry
-                            var latLong = GeolocationHelper.ToLatLong(options.LatLong);
-                            RegistryHelper.SetLatLong(latLong);
+                    SetRegistryLocation(latLong);
 
-                            Console.WriteLine("The following location has been set in the driver's registry settings:");
-                            ConsoleHelper.WriteLatLong(latLong);
-                        }
+                    Console.WriteLine("The following location has been set in the driver's registry settings:");
+                    Console.WriteLine("Lat:    {0}", latLong.Latitude);
+                    Console.WriteLine("Long:   {0}", latLong.Longitude);
 
-                        if (options.Get)
-                        {
-                            // get the value from the location API
-                            var latLong = GeolocationHelper.Get();
+                    RestartDriver();
+                    return 0;
+                }
 
-                            Console.WriteLine("The following location has been returned from the Windows location API:");
-                            ConsoleHelper.WriteLatLong(latLong);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        ConsoleHelper.WriteError(ex.Message);
+                // 2. Check for -g (Get Location)
+                if (args.Any(x => x.Equals("-g", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var latLong = GeolocationHelper.Get();
 
-                        // if the debugger is attached, break.
-                        if (Debugger.IsAttached)
-                        {
-                            Debugger.Break();
-                        }
+                    Console.WriteLine("The following location has been got from the Windows location API:");
+                    Console.WriteLine("Lat:    {0}", latLong.Latitude);
+                    Console.WriteLine("Long:   {0}", latLong.Longitude);
 
-                        exitCode = 1;
-                    }
+                    return 0;
+                }
 
-                    exitCode = 0;
-                });
+                // 3. Manual Help Output (Bypasses HelpText library errors)
+                PrintUsage();
+                return 1;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+                return 1;
+            }
+        }
 
-            Environment.Exit(exitCode);
-            ConsoleHelper.WriteDebugExit();
+        private static void PrintUsage()
+        {
+            Console.WriteLine("FakeGPS v1.1");
+            Console.WriteLine("Usage:");
+            Console.WriteLine("  FakeGPS -s <lat,long>   Set latitude and longitude");
+            Console.WriteLine("  FakeGPS -g              Get current status");
+        }
+
+        private static void SetRegistryLocation(LatLong latLong)
+        {
+            string keyPath = @"System\CurrentControlSet\Enum\ROOT\UNKNOWN\0000\Device Parameters\FakeGPS";
+            using (RegistryKey key = Registry.LocalMachine.CreateSubKey(keyPath))
+            {
+                if (key != null)
+                {
+                    key.SetValue("Latitude", latLong.Latitude.ToString(), RegistryValueKind.String);
+                    key.SetValue("Longitude", latLong.Longitude.ToString(), RegistryValueKind.String);
+                }
+                else
+                {
+                    throw new Exception("Please run as Administrator to update registry.");
+                }
+            }
+        }
+
+        private static void RestartDriver()
+        {
+            Console.WriteLine("Refreshing driver to clear Windows location cache...");
+            try
+            {
+                // Script updated to target "FakeGPS Sensor" specifically
+                string script = @"
+                    $device = Get-PnpDevice | Where-Object { $_.FriendlyName -like '*FakeGPS*' } | Select-Object -First 1
+                    if ($device) {
+                        Disable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false
+                        Start-Sleep -Seconds 2
+                        Enable-PnpDevice -InstanceId $device.InstanceId -Confirm:$false
+                    }";
+
+                ProcessStartInfo psi = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+
+                using (Process process = Process.Start(psi))
+                {
+                    process.WaitForExit();
+                }
+                Console.WriteLine("Driver refresh complete!");
+            }
+            catch
+            {
+                Console.WriteLine("Note: Auto-refresh failed. Please ensure you are running as Administrator.");
+            }
         }
     }
 }
