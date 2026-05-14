@@ -63,7 +63,3 @@ Driver refresh complete!
 * **Stability:** Compiled for x64 with a stable ILMerge configuration for a portable, single-executable experience.
 
 **Note:** If your location does not update in a web browser, try a new Incognito window or clear the browser cache to force a new check against the refreshed driver.
-
-```
-
-```
